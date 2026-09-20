@@ -309,7 +309,7 @@ local QuestRegistry = {
         NpcName = "Chaka",
         NpcPos = Vector3.new(471, 1148.5, -1260),
         Region = "Bamboo Grove",
-        TargetEnemy = "Bandit",
+        TargetEnemy = "Kaiden Subordinate",
         BossTarget = "Kaiden",
         Description = "Chaka asks you to deal with Kaiden and the bandits."
     },
@@ -2465,9 +2465,7 @@ task.spawn(function()
                     end
                     if bossMode and questInfo and questInfo.BossTarget then
                         targetMob = questInfo.BossTarget
-                    elseif bossMode and codeMob then
-                        targetMob = codeMob
-                    elseif codeMob and #getTargets(codeMob) > 0 then
+                    elseif codeMob then
                         targetMob = codeMob
                     end
                     if not targetMob then
