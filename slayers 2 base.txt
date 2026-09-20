@@ -305,6 +305,14 @@ local QuestRegistry = {
         AltTarget = "Mother Bear",
         Description = "Hunt bears to help Tom in the bamboo grove."
     },
+    ["Kaiden and the bandits"] = {
+        NpcName = "Chaka",
+        NpcPos = Vector3.new(471, 1148.5, -1260),
+        Region = "Bamboo Grove",
+        TargetEnemy = "Bandit",
+        BossTarget = "Kaiden",
+        Description = "Chaka asks you to deal with Kaiden and the bandits."
+    },
     ["[Butterfly Estate] Shiori: Restock Infirmary"] = {
         NpcName = "Shiori",
         NpcPos = Vector3.new(32.2, 391.1, -73.9),
@@ -368,6 +376,7 @@ local QuestOptions = {
     "[Mistfall Harbor] Ginzo: Lost Jewelry Box",
     "[Bamboo Grove] Betty: Betty's Gemstone",
     "[Bamboo Grove] Tom: Wood & Bamboo",
+    "Kaiden and the bandits",
     "[Butterfly Estate] Shiori: Restock Infirmary",
     "[Butterfly Estate] Ren: Lost Nichirin",
     "[Iceveil Valley] Tomoi: Ice Demons",
@@ -657,11 +666,8 @@ local function isBossModel(m)
     if par and par:FindFirstChild("BossInfo") then
         return true
     end
-    local n = m.Name:lower()
-    for bn in pairs(bossNameCheck) do
-        if n:find(bn, 1, true) then
-            return true
-        end
+    if bossNameCheck[m.Name:lower()] then
+        return true
     end
     return false
 end
@@ -675,10 +681,15 @@ local function getTargets(targetName)
         if not activeFolder then return end
         for _, item in ipairs(activeFolder:GetChildren()) do
             local match = false
+            local exact = false
             local iName = item.Name:lower()
             if isAll then
                 match = true
-            elseif item.Name == targetName or iName:find(lowerTarget, 1, true) or lowerTarget:find(iName, 1, true) then
+                exact = true
+            elseif item.Name == targetName or iName == lowerTarget then
+                match = true
+                exact = true
+            elseif iName:find(lowerTarget, 1, true) or lowerTarget:find(iName, 1, true) then
                 match = true
             end
             
@@ -692,7 +703,7 @@ local function getTargets(targetName)
                         end
                     end
                 end
-                if m and not isPlayerModel(m) then
+                if m and not isPlayerModel(m) and (exact or isAll or not isBossModel(m)) then
                     local hum = m:FindFirstChildOfClass("Humanoid")
                     local root = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChildWhichIsA("BasePart")
                     if hum and root and hum.Health > 0 then
@@ -700,7 +711,8 @@ local function getTargets(targetName)
                             Model = m,
                             Humanoid = hum,
                             Root = root,
-                            Name = item.Name
+                            Name = item.Name,
+                            Exact = exact
                         })
                     end
                 end
@@ -731,6 +743,22 @@ local function getTargets(targetName)
         scanActiveFolder(deb)
     end
     
+    local anyExact = false
+    for _, r in ipairs(results) do
+        if r.Exact then
+            anyExact = true
+            break
+        end
+    end
+    if anyExact then
+        local strict = {}
+        for _, r in ipairs(results) do
+            if r.Exact then
+                strict[#strict + 1] = r
+            end
+        end
+        return strict
+    end
     return results
 end
 
@@ -862,6 +890,23 @@ local function uiClick(target)
     end)
 end
 
+local function wakeMouse(gx, gy)
+    pcall(function()
+        if setrobloxinput then setrobloxinput(true) end
+        if not mousemoverel then return end
+        local dx = gx - GameMouse.X
+        local dy = gy - GameMouse.Y
+        if math.abs(dx) > 60 or math.abs(dy) > 60 then
+            mousemoverel(dx, dy)
+            task.wait(0.05)
+        end
+        for _, o in ipairs({ {14, 0}, {-9, 7}, {5, -10}, {-7, -4}, {11, 6}, {-4, 0} }) do
+            mousemoverel(o[1], o[2])
+            task.wait(0.04)
+        end
+    end)
+end
+
 local function clickNearbyPrompt()
     local holder = lp.PlayerGui:FindFirstChild("PromptsHolder")
     if not holder then return false end
@@ -869,6 +914,7 @@ local function clickNearbyPrompt()
         if f.ClassName == "BillboardGui" then
             local tb = f:FindFirstChild("TextButton")
             if tb then
+                wakeMouse(tb.AbsolutePosition.X + tb.AbsoluteSize.X * 0.5, tb.AbsolutePosition.Y + tb.AbsoluteSize.Y * 0.5)
                 uiClick(tb)
                 return true
             end
@@ -941,6 +987,13 @@ local function collectChoices(actual)
 end
 
 local function handleQuestDialogue(pickBoss)
+    local firstActual = getDialogueUI()
+    if firstActual then
+        local cd = firstActual:FindFirstChild("ClickDetector")
+        if cd then
+            wakeMouse(cd.AbsolutePosition.X + cd.AbsoluteSize.X * 0.4, cd.AbsolutePosition.Y + cd.AbsoluteSize.Y * 0.5)
+        end
+    end
     local attempts = 0
     local acceptedOnce = false
     for _ = 1, 45 do
@@ -1052,7 +1105,9 @@ bossNameCheck = {
     ["flame trainee"] = true, ["thunder trainee"] = true, ["wind trainee"] = true,
     ["stone trainee"] = true, ["sound trainee"] = true, ["insect trainee"] = true,
     ["serpent trainee"] = true, ["water trainee"] = true, ["tai chi trainee"] = true,
-    ["soryu trainee"] = true, ["reaper trainee"] = true
+    ["soryu trainee"] = true, ["reaper trainee"] = true,
+    ["water trainee sabito"] = true, ["tai chi trainee suzume"] = true,
+    ["soryu trainee goki"] = true, ["reaper trainee kuzan"] = true
 }
 
 task.spawn(function()
@@ -2408,7 +2463,9 @@ task.spawn(function()
                     if pendingTask and pendingTask.Code ~= "" then
                         codeMob = codeToMobName(pendingTask.Code)
                     end
-                    if bossMode and codeMob then
+                    if bossMode and questInfo and questInfo.BossTarget then
+                        targetMob = questInfo.BossTarget
+                    elseif bossMode and codeMob then
                         targetMob = codeMob
                     elseif codeMob and #getTargets(codeMob) > 0 then
                         targetMob = codeMob
@@ -2635,23 +2692,23 @@ end)
 
 task.spawn(function()
     local skillKeys = { 49, 50, 51, 52, 53, 54 }
-    local zxOn = false
     while State.Running do
         if State.SpamZX then
             if iskeypressed and iskeypressed(PanicVK) then
                 if panicStop then panicStop() end
                 continue
             end
-            zxOn = not zxOn
-            local k = zxOn and 90 or 88
-            if keypress and keyrelease then
-                pcall(function()
-                    keypress(k)
-                    task.wait(0.05)
-                    keyrelease(k)
-                end)
+            for _, k in ipairs({ 90, 88 }) do
+                if not State.Running or not State.SpamZX then break end
+                if keypress and keyrelease then
+                    pcall(function()
+                        keypress(k)
+                        keyrelease(k)
+                    end)
+                end
+                task.wait(0.06)
             end
-            task.wait(0.12)
+            task.wait(0.15)
         elseif State.AutoSpamSkills then
             for _, k in ipairs(skillKeys) do
                 if not State.Running or not State.AutoSpamSkills then break end
