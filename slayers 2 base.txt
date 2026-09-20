@@ -1385,6 +1385,18 @@ FarmMobsSec:Dropdown("Quest Mission Type", {"Normal NPC Quest"}, { "Normal NPC Q
     State.QuestPickMode = type(val) == "table" and val[1] or val
 end)
 
+FarmMobsSec:Toggle("Spam Z & X (sword skills)", false, function(val)
+    State.SpamZX = val
+    if not val then
+        if keyrelease then
+            pcall(function()
+                keyrelease(90)
+                keyrelease(88)
+            end)
+        end
+    end
+end)
+
 FarmBossSec:Dropdown("Select Boss", {"Akazo"}, BossMobsList, false, function(val)
     val = type(val) == "table" and val[1] or val
     State.SelectedBoss = val
@@ -1779,18 +1791,6 @@ end)
 
 MiscSec:Toggle("NoClip", false, function(val)
     State.NoClip = val
-end)
-
-MiscSec:Toggle("Spam Z & X", false, function(val)
-    State.SpamZX = val
-    if not val then
-        if keyrelease then
-            pcall(function()
-                keyrelease(90)
-                keyrelease(88)
-            end)
-        end
-    end
 end)
 
 local HideUIVK = 112
@@ -2693,13 +2693,14 @@ end)
 task.spawn(function()
     local skillKeys = { 49, 50, 51, 52, 53, 54 }
     while State.Running do
-        if State.SpamZX then
+        if State.SpamZX and (State.AutoFarmMobs or State.AutoFarmBoss or State.AutoQuestTasks) then
             if iskeypressed and iskeypressed(PanicVK) then
                 if panicStop then panicStop() end
                 continue
             end
             for _, k in ipairs({ 90, 88 }) do
                 if not State.Running or not State.SpamZX then break end
+                if not (State.AutoFarmMobs or State.AutoFarmBoss or State.AutoQuestTasks) then break end
                 if keypress and keyrelease then
                     pcall(function()
                         keypress(k)
