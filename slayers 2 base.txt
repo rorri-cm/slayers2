@@ -52,7 +52,8 @@ local State = {
     ESPDistance = 1200,
     UnlockingLocations = false,
     FullAutoFarm = false,
-    QuestPickMode = "Normal NPC Quest"
+    QuestPickMode = "Normal NPC Quest",
+    SpamZX = false
 }
 _G.Slayers2Hub = State
 
@@ -221,14 +222,25 @@ local BossMobsList = {
     "Hoyuzo",
     "Mother Bear",
     "Fujiko",
-    "Shinora (Hashira)",
-    "Obari (Hashira)",
-    "Saneri (Hashira)",
-    "Giyen (Hashira)",
-    "Tengai (Hashira)",
-    "Zentaro (Hashira)",
-    "Gyorei (Hashira)",
-    "Rengu (Hashira)",
+    "Shinora",
+    "Obari",
+    "Saneri",
+    "Giyen",
+    "Tengai",
+    "Zentaro",
+    "Gyorei",
+    "Rengu",
+    "Flame Trainee",
+    "Thunder Trainee",
+    "Wind Trainee",
+    "Stone Trainee",
+    "Sound Trainee",
+    "Insect Trainee",
+    "Serpent Trainee",
+    "Water Trainee Sabito",
+    "Soryu Trainee Goki",
+    "Tai Chi Trainee Suzume",
+    "Reaper Trainee Kuzan",
     "Muzan",
     "All Bosses"
 }
@@ -635,6 +647,25 @@ local function smartTeleportToEntity(name, fallbackPos)
     end
 end
 
+local bossNameCheck
+local function isBossModel(m)
+    if not m then return false end
+    if m:FindFirstChild("BossInfo") then
+        return true
+    end
+    local par = m.Parent
+    if par and par:FindFirstChild("BossInfo") then
+        return true
+    end
+    local n = m.Name:lower()
+    for bn in pairs(bossNameCheck) do
+        if n:find(bn, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
 local function getTargets(targetName)
     local results = {}
     local lowerTarget = targetName and targetName:lower() or ""
@@ -763,6 +794,9 @@ local function codeToMobName(code)
     local spaced = (tostring(code):gsub("(%l)(%u)", "%1 %2"))
     return spaced
 end
+
+local PanicVK = 113
+local panicStop
 
 local function getDialogueUI()
     local holder = lp.PlayerGui:FindFirstChild("ComponentsHolder")
@@ -911,6 +945,10 @@ local function handleQuestDialogue(pickBoss)
     local acceptedOnce = false
     for _ = 1, 45 do
         if not State.Running or not State.FullAutoFarm then return false end
+        if iskeypressed and iskeypressed(PanicVK) then
+            if panicStop then panicStop() end
+            return false
+        end
         local actual = getDialogueUI()
         if not actual then
             return acceptedOnce
@@ -955,6 +993,10 @@ end
 local function autoAcceptQuest(npcName, npcPos)
     for round = 1, 3 do
         if not State.Running or not State.FullAutoFarm then return false end
+        if iskeypressed and iskeypressed(PanicVK) then
+            if panicStop then panicStop() end
+            return false
+        end
         smartTeleportToEntity(npcName, npcPos)
         task.wait(0.9)
         clickNearbyPrompt()
@@ -999,14 +1041,18 @@ local function clearAllESP()
 end
 State.ClearESP = clearAllESP
 
-local bossNameCheck = {
+bossNameCheck = {
     ["akazo"] = true, ["gyutai"] = true, ["datai"] = true, ["domae"] = true,
     ["reaper"] = true, ["nezura"] = true, ["yahari"] = true, ["sumari"] = true,
     ["enru"] = true, ["yeti demon"] = true, ["small yeti"] = true, ["hand demon"] = true,
     ["zuko"] = true, ["kaiden"] = true, ["hoyuzo"] = true, ["mother bear"] = true,
     ["fujiko"] = true, ["muzan"] = true, ["shinora"] = true, ["obari"] = true,
     ["saneri"] = true, ["giyen"] = true, ["tengai"] = true, ["zentaro"] = true,
-    ["gyorei"] = true, ["rengu"] = true
+    ["gyorei"] = true, ["rengu"] = true,
+    ["flame trainee"] = true, ["thunder trainee"] = true, ["wind trainee"] = true,
+    ["stone trainee"] = true, ["sound trainee"] = true, ["insect trainee"] = true,
+    ["serpent trainee"] = true, ["water trainee"] = true, ["tai chi trainee"] = true,
+    ["soryu trainee"] = true, ["reaper trainee"] = true
 }
 
 task.spawn(function()
@@ -1047,13 +1093,7 @@ task.spawn(function()
                                             if root and hum and hum.Health > 0 then
                                                 local dist = (root.Position - myPos).Magnitude
                                                 if dist <= maxDist then
-                                                    local isBoss = false
-                                                    for bn, _ in pairs(bossNameCheck) do
-                                                        if m.Name:lower():find(bn, 1, true) then
-                                                            isBoss = true
-                                                            break
-                                                        end
-                                                    end
+                                                    local isBoss = isBossModel(m)
                                                     if isBoss and State.ESPBosses then
                                                         table.insert(out, {
                                                             type = "model",
@@ -1686,6 +1726,18 @@ MiscSec:Toggle("NoClip", false, function(val)
     State.NoClip = val
 end)
 
+MiscSec:Toggle("Spam Z & X", false, function(val)
+    State.SpamZX = val
+    if not val then
+        if keyrelease then
+            pcall(function()
+                keyrelease(90)
+                keyrelease(88)
+            end)
+        end
+    end
+end)
+
 local HideUIVK = 112
 local HideVKMap = {
     f1 = 112, f2 = 113, f3 = 114, f4 = 115, f5 = 116, f6 = 117,
@@ -1724,7 +1776,6 @@ task.spawn(function()
     end
 end)
 
-local PanicVK = 113
 MiscSec:Keybind("Panic Stop", "f2", function(val)
     if type(val) ~= "string" then return end
     local code = HideVKMap[val]
@@ -1798,26 +1849,33 @@ local function fafStep()
     end
 end
 
+panicStop = function()
+    pcall(function() hFullAutoFarm:Set(false) end)
+    pcall(function() hAutoFarmMobs:Set(false) end)
+    pcall(function() hAutoFarmBoss:Set(false) end)
+    State.AutoQuestTasks = false
+    pcall(function() hAutoTrain:Set(false) end)
+    pcall(function() hAutoChest:Set(false) end)
+    State.AutoSpamSkills = false
+    State.SpamZX = false
+    if keyrelease then
+        pcall(function()
+            keyrelease(102)
+            keyrelease(70)
+            keyrelease(84)
+            keyrelease(90)
+            keyrelease(88)
+        end)
+    end
+    UI:Notify({ Title = "Panic", Content = "All farms & automations stopped", Type = "warn", Duration = 3 })
+end
+
 task.spawn(function()
     local wasDown = false
     while State.Running do
         local down = iskeypressed(PanicVK)
         if down and not wasDown then
-            pcall(function() hFullAutoFarm:Set(false) end)
-            pcall(function() hAutoFarmMobs:Set(false) end)
-            pcall(function() hAutoFarmBoss:Set(false) end)
-            State.AutoQuestTasks = false
-            pcall(function() hAutoTrain:Set(false) end)
-            pcall(function() hAutoChest:Set(false) end)
-            State.AutoSpamSkills = false
-            if keyrelease then
-                pcall(function()
-                    keyrelease(102)
-                    keyrelease(70)
-                    keyrelease(84)
-                end)
-            end
-            UI:Notify({ Title = "Panic", Content = "All farms & automations stopped", Type = "warn", Duration = 3 })
+            panicStop()
         end
         wasDown = down
         fafStep()
@@ -2072,6 +2130,10 @@ task.spawn(function()
                         if not hum or hum.Health <= 0 or not char.Parent then
                             break
                         end
+                        if iskeypressed and iskeypressed(PanicVK) then
+                            panicStop()
+                            break
+                        end
                         
                         local tRoot = target.Root
                         local tPos = tRoot.Position
@@ -2186,6 +2248,10 @@ task.spawn(function()
                     
                     while State.Running and State.AutoFarmBoss and target.Humanoid and target.Humanoid.Health > 0 do
                         if not hum or hum.Health <= 0 or not char.Parent then
+                            break
+                        end
+                        if iskeypressed and iskeypressed(PanicVK) then
+                            panicStop()
                             break
                         end
                         
@@ -2337,11 +2403,15 @@ task.spawn(function()
                             need = serverRemaining
                         end
                     end
+                    local bossMode = State.QuestPickMode == "Boss Quest"
+                    local codeMob = nil
                     if pendingTask and pendingTask.Code ~= "" then
-                        local codeName = codeToMobName(pendingTask.Code)
-                        if #getTargets(codeName) > 0 then
-                            targetMob = codeName
-                        end
+                        codeMob = codeToMobName(pendingTask.Code)
+                    end
+                    if bossMode and codeMob then
+                        targetMob = codeMob
+                    elseif codeMob and #getTargets(codeMob) > 0 then
+                        targetMob = codeMob
                     end
                     if not targetMob then
                         targetMob = questInfo and questInfo.TargetEnemy
@@ -2360,7 +2430,18 @@ task.spawn(function()
                     
                     if targetMob and need > 0 then
                         local targets = getTargets(targetMob)
-                        if #targets == 0 and questInfo and questInfo.AltTarget then
+                        if bossMode and #targets > 0 then
+                            local filtered = {}
+                            for _, t in ipairs(targets) do
+                                if isBossModel(t.Model) then
+                                    filtered[#filtered + 1] = t
+                                end
+                            end
+                            if #filtered > 0 then
+                                targets = filtered
+                            end
+                        end
+                        if #targets == 0 and not bossMode and questInfo and questInfo.AltTarget then
                             targets = getTargets(questInfo.AltTarget)
                         end
                         
@@ -2378,6 +2459,10 @@ task.spawn(function()
                             local style = getEquippedStyle()
                             while State.Running and State.AutoQuestTasks and target.Humanoid and target.Humanoid.Health > 0 do
                                 if not hum or hum.Health <= 0 or not char.Parent then
+                                    break
+                                end
+                                if iskeypressed and iskeypressed(PanicVK) then
+                                    panicStop()
                                     break
                                 end
                                 
@@ -2431,7 +2516,7 @@ task.spawn(function()
                                 task.wait(1.0)
                                 if not State.Running or not State.AutoQuestTasks then break end
                                 targets = getTargets(targetMob)
-                                if #targets == 0 and questInfo and questInfo.AltTarget then
+                                if #targets == 0 and not bossMode and questInfo and questInfo.AltTarget then
                                     targets = getTargets(questInfo.AltTarget)
                                 end
                                 if #targets > 0 then
@@ -2550,8 +2635,24 @@ end)
 
 task.spawn(function()
     local skillKeys = { 49, 50, 51, 52, 53, 54 }
+    local zxOn = false
     while State.Running do
-        if State.AutoSpamSkills then
+        if State.SpamZX then
+            if iskeypressed and iskeypressed(PanicVK) then
+                if panicStop then panicStop() end
+                continue
+            end
+            zxOn = not zxOn
+            local k = zxOn and 90 or 88
+            if keypress and keyrelease then
+                pcall(function()
+                    keypress(k)
+                    task.wait(0.05)
+                    keyrelease(k)
+                end)
+            end
+            task.wait(0.12)
+        elseif State.AutoSpamSkills then
             for _, k in ipairs(skillKeys) do
                 if not State.Running or not State.AutoSpamSkills then break end
                 if keypress and keyrelease then
