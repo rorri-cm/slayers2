@@ -160,7 +160,7 @@ local RegionSpawns = {
     ["Gyutai"] = Vector3.new(-263.1, 1043.5, -1150.5),
     ["Datai"] = Vector3.new(-163.2, 1043.5, -1136.9),
     ["Saneri"] = Vector3.new(-375.2, 1093.6, -438.8),
-    ["Serpent Trainee"] = Vector3.new(-171.3, 1279.0, -1475.1)
+    ["Serpent Trainee"] = Vector3.new(-270.3, 1292.49, -1533.8)
 }
 
 local RegularMobsList = {
@@ -398,9 +398,9 @@ local TeleportZones = {
     ["Bamboo Grove (Bear Woods)"] = Vector3.new(540, 1122, -1023),
     ["Bamboo Grove Sanctuary"] = Vector3.new(657.4, 1021.2, 139.7),
     ["Butterfly Estate"] = Vector3.new(32.2, 391.1, -73.9),
-    ["Hidden Mist Village"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Hidden Mist Village"] = Vector3.new(1793.08, 661.30, -231.72),
     ["Iceveil Valley (Frozen Valley)"] = Vector3.new(485.3, 1222.9, -1813.4),
-    ["Iceveil Settlement"] = Vector3.new(-1046.8, 1133.5, -616.8),
+    ["Iceveil Settlement"] = Vector3.new(-154.62, 1351.50, -2556.21),
     ["Final Selection Plains (Exam)"] = Vector3.new(-1800, 30, 500),
     ["Misc (Boss Arena & Trainees)"] = Vector3.new(-263.1, 1043.5, -1150.5),
     ["Workout Grounds (Boulder Push)"] = Vector3.new(-311.6, 1071.6, -579.6)
@@ -420,8 +420,30 @@ local BossTeleports = {
     ["Small Yeti"] = Vector3.new(485.3, 1222.9, -1813.4),
     ["Hand Demon"] = Vector3.new(-1800, 30, 500),
     ["Domae"] = Vector3.new(-1132.6, 1381.1, -1742.5),
-    ["Reaper"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Muzan"] = Vector3.new(182.1, 875.0, 697.0)
+    ["Reaper"] = Vector3.new(99.86, 1043.49, -576.31),
+    ["Enru"] = Vector3.new(768.77, 1121.7, -1045.64),
+    ["Shinora"] = Vector3.new(768.77, 1121.7, -1045.64),
+    ["Obari"] = Vector3.new(768.77, 1121.7, -1045.64),
+    ["Giyen"] = Vector3.new(768.77, 1121.7, -1045.64),
+    ["Tengai"] = Vector3.new(768.77, 1121.7, -1045.64),
+    ["Zentaro"] = Vector3.new(768.77, 1121.7, -1045.64),
+    ["Gyorei"] = Vector3.new(768.77, 1121.7, -1045.64),
+    ["Rengu"] = Vector3.new(768.77, 1121.7, -1045.64),
+    ["Nezura"] = Vector3.new(395.4, 1018.5, -622.7),
+    ["Yahari"] = Vector3.new(823.2, 1019.1, -640.0),
+    ["Sumari"] = Vector3.new(395.4, 1018.5, -622.7),
+    ["Flame Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Thunder Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Wind Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Stone Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Insect Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Sound Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Serpent Trainee"] = Vector3.new(-270.3, 1292.49, -1533.8),
+    ["Water Trainee Sabito"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Soryu Trainee Goki"] = Vector3.new(-424.5, 289.1, 540.4),
+    ["Tai Chi Trainee Suzume"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Reaper Trainee Kuzan"] = Vector3.new(-263.1, 1043.5, -1150.5),
+    ["Muzan"] = Vector3.new(2466.37, 1079.63, 2334.54)
 }
 
 local TrainerTeleports = {
@@ -434,17 +456,7 @@ local TrainerTeleports = {
     ["Jugg (Mistfall)"] = Vector3.new(487.7, 876.5, 1007.8),
     ["Liv (Bamboo Grove)"] = Vector3.new(657.4, 1021.2, 139.7),
     ["Serpent Trainer Obari"] = Vector3.new(37.0, 1307.5, -1179.5),
-    ["Serpent Trainee"] = Vector3.new(-171.3, 1279.0, -1475.1),
-    ["Water Trainee Sabito"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Thunder Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Flame Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Wind Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Stone Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Insect Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Sound Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Soryu Trainee Goki"] = Vector3.new(-424.5, 289.1, 540.4),
-    ["Tai Chi Trainee Suzume"] = Vector3.new(-263.1, 1043.5, -1150.5),
-    ["Reaper Trainee Kuzan"] = Vector3.new(-263.1, 1043.5, -1150.5)
+    ["Lamplighter Isamu"] = Vector3.new(1082.2, 1425.7, -749.0)
 }
 
 local WorkoutTeleports = {
@@ -521,69 +533,92 @@ local function safeTeleport(pos)
     end
 end
 
-local function smartTeleportToEntity(name, fallbackPos)
-    local char = lp.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    local foundPos = nil
-    
+local function getNpcModelRoot(container)
+    local m = container:FindFirstChildOfClass("Model")
+    if not m and container.ClassName == "Model" then m = container end
+    if not m then
+        for _, sub in ipairs(container:GetChildren()) do
+            if sub.ClassName == "Model" then m = sub break end
+        end
+    end
+    if not m then
+        return nil
+    end
+    return m:FindFirstChild("HumanoidRootPart") or m:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function findLiveNpcPos(name)
+    local lower = string.lower(name)
+    local sets = {}
     local deb = Workspace:FindFirstChild("Debree")
     if deb then
         local dReg = deb:FindFirstChild("Regions")
         if dReg then
             for _, r in ipairs(dReg:GetChildren()) do
-                local stat = r:FindFirstChild("StationaryNpcs")
-                if stat then
-                    for _, npc in ipairs(stat:GetChildren()) do
-                        if npc.Name == name or npc.Name:lower():find(name:lower(), 1, true) or name:lower():find(npc.Name:lower(), 1, true) then
-                            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
-                            if root then foundPos = root.Position break end
+                sets[#sets + 1] = r:FindFirstChild("StationaryNpcs")
+                sets[#sets + 1] = r:FindFirstChild("ActiveNpcs")
+            end
+        end
+    end
+    local hums = Workspace:FindFirstChild("Humanoids")
+    if hums then
+        local hReg = hums:FindFirstChild("Regions")
+        if hReg then
+            for _, r in ipairs(hReg:GetChildren()) do
+                sets[#sets + 1] = r:FindFirstChild("ActiveNpcs")
+            end
+        end
+    end
+    for pass = 1, 2 do
+        for _, set in ipairs(sets) do
+            if set then
+                for _, item in ipairs(set:GetChildren()) do
+                    local iName = string.lower(item.Name)
+                    local matches
+                    if pass == 1 then
+                        matches = (iName == lower)
+                    else
+                        matches = iName:find(lower, 1, true) ~= nil or lower:find(iName, 1, true) ~= nil
+                    end
+                    if matches then
+                        local root = getNpcModelRoot(item)
+                        if root then
+                            return root.Position
                         end
                     end
                 end
-                if foundPos then break end
-                local sc = r:FindFirstChild("SpawnCrystal")
-                if sc and (r.Name == name or r.Name:lower():find(name:lower(), 1, true) or name:lower():find(r.Name:lower(), 1, true)) then
-                    local root = sc:FindFirstChild("Root") or sc:FindFirstChildWhichIsA("BasePart")
-                    if root then foundPos = root.Position break end
-                end
             end
         end
-        if not foundPos then
+        if pass == 1 and deb then
             for _, ch in ipairs(deb:GetChildren()) do
-                if ch.Name:lower():find(name:lower(), 1, true) or name:lower():find(ch.Name:lower(), 1, true) then
+                if ch.Name:lower():find(lower, 1, true) or lower:find(string.lower(ch.Name), 1, true) then
                     local root = ch:FindFirstChild("HumanoidRootPart") or ch:FindFirstChildWhichIsA("BasePart")
-                    if root then foundPos = root.Position break end
+                    if root then
+                        return root.Position
+                    end
                 end
             end
         end
     end
+    return nil
+end
+
+local function smartTeleportToEntity(name, fallbackPos)
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local foundPos = findLiveNpcPos(name)
     
     if not foundPos then
-        local hums = Workspace:FindFirstChild("Humanoids")
-        if hums then
-            local hReg = hums:FindFirstChild("Regions")
-            if hReg then
-                for _, r in ipairs(hReg:GetChildren()) do
-                    local act = r:FindFirstChild("ActiveNpcs")
-                    if act then
-                        for _, item in ipairs(act:GetChildren()) do
-                            if item.Name == name or item.Name:lower():find(name:lower(), 1, true) or name:lower():find(item.Name:lower(), 1, true) then
-                                local m = item:FindFirstChildOfClass("Model") or (item.ClassName == "Model" and item)
-                                if not m then
-                                    for _, sub in ipairs(item:GetChildren()) do
-                                        if sub.ClassName == "Model" then m = sub break end
-                                    end
-                                end
-                                if m then
-                                    local root = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChildWhichIsA("BasePart")
-                                    if root then foundPos = root.Position break end
-                                end
-                            end
-                        end
-                    end
-                    if foundPos then break end
+        local deb = Workspace:FindFirstChild("Debree")
+        local dReg = deb and deb:FindFirstChild("Regions")
+        if dReg then
+            for _, r in ipairs(dReg:GetChildren()) do
+                local sc = r:FindFirstChild("SpawnCrystal")
+                if sc and (r.Name == name or r.Name:lower():find(name:lower(), 1, true) or name:lower():find(r.Name:lower(), 1, true)) then
+                    local root = sc:FindFirstChild("Root") or sc:FindFirstChildWhichIsA("BasePart")
+                    if root then foundPos = root.Position break end
                 end
             end
         end
@@ -1702,7 +1737,10 @@ end, nil, true)
 
 TeleportSec:Button("Travel to Region", function()
     local pos = TeleportZones[SelectedZone]
-    smartTeleportToEntity(SelectedZone, pos)
+    if pos then
+        safeTeleport(pos)
+        UI:Notify({ Title = "Teleport", Content = "Teleported to: " .. tostring(SelectedZone), Type = "success", Duration = 2 })
+    end
 end)
 
 local BossNames = {}
@@ -1715,8 +1753,13 @@ TeleportSec:Dropdown("Boss Arena", {SelectedBossTeleport}, BossNames, false, fun
 end, nil, true)
 
 TeleportSec:Button("Travel to Boss Arena", function()
-    local pos = BossTeleports[SelectedBossTeleport]
-    smartTeleportToEntity(SelectedBossTeleport, pos)
+    local live = findLiveNpcPos(SelectedBossTeleport)
+    if live then
+        safeTeleport(live)
+        UI:Notify({ Title = "Teleport", Content = "Reached live: " .. tostring(SelectedBossTeleport), Type = "success", Duration = 2 })
+    else
+        UI:Notify({ Title = "Teleport", Content = tostring(SelectedBossTeleport) .. " is not spawned right now", Type = "warn", Duration = 3 })
+    end
 end)
 
 local TrainerNames = {}
@@ -1729,8 +1772,19 @@ TeleportSec:Dropdown("Trainer", {SelectedTrainer}, TrainerNames, false, function
 end, nil, true)
 
 TeleportSec:Button("Travel to Trainer", function()
+    local live = findLiveNpcPos(SelectedTrainer)
+    if live then
+        safeTeleport(live)
+        UI:Notify({ Title = "Teleport", Content = "Reached live: " .. tostring(SelectedTrainer), Type = "success", Duration = 2 })
+        return
+    end
     local pos = TrainerTeleports[SelectedTrainer]
-    smartTeleportToEntity(SelectedTrainer, pos)
+    if pos then
+        safeTeleport(pos)
+        UI:Notify({ Title = "Teleport", Content = "Trainer not found live, went to last known spot: " .. tostring(SelectedTrainer), Type = "info", Duration = 2 })
+    else
+        UI:Notify({ Title = "Teleport", Content = "No known location for " .. tostring(SelectedTrainer), Type = "warn", Duration = 2 })
+    end
 end)
 
 local CrystalWaypoints = {
