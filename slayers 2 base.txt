@@ -51,6 +51,8 @@ local State = {
     ESPCrystals = false,
     ESPSpiderLily = false,
     ESPHorses = false,
+    ESPLevers = false,
+    ESPMuzan = false,
     ESPDistance = 1200,
     UnlockingLocations = false,
     FullAutoFarm = false,
@@ -878,14 +880,14 @@ local function uiClick(target)
     end
     pcall(function()
         if setrobloxinput then setrobloxinput(true) end
-        for _ = 1, 10 do
+        for _ = 1, 3 do
             local dx = gx - GameMouse.X
             local dy = gy - GameMouse.Y
-            if math.abs(dx) <= 4 and math.abs(dy) <= 4 then break end
+            if math.abs(dx) <= 10 and math.abs(dy) <= 10 then break end
             mousemoverel(dx, dy)
-            task.wait(0.05)
+            task.wait(0.04)
         end
-        task.wait(0.05)
+        task.wait(0.04)
         mouse1press()
         task.wait(0.07)
         mouse1release()
@@ -898,11 +900,13 @@ local function wakeMouse(gx, gy)
         if not mousemoverel then return end
         local dx = gx - GameMouse.X
         local dy = gy - GameMouse.Y
-        if math.abs(dx) > 60 or math.abs(dy) > 60 then
-            mousemoverel(dx, dy)
-            task.wait(0.05)
+        if math.abs(dx) > 40 or math.abs(dy) > 40 then
+            mousemoverel(dx * 0.5, dy * 0.5)
+            task.wait(0.04)
+            mousemoverel(gx - GameMouse.X, gy - GameMouse.Y)
+            task.wait(0.04)
         end
-        for _, o in ipairs({ {14, 0}, {-9, 7}, {5, -10}, {-7, -4}, {11, 6}, {-4, 0} }) do
+        for _, o in ipairs({ {7, 0}, {-7, 0}, {0, 0} }) do
             mousemoverel(o[1], o[2])
             task.wait(0.04)
         end
@@ -1098,7 +1102,7 @@ State.ClearESP = clearAllESP
 
 local function anyEspOn()
     return State.ESPMobs or State.ESPBosses or State.ESPPlants or State.ESPChests or State.ESPCrystals
-        or State.ESPSpiderLily or State.ESPHorses
+        or State.ESPSpiderLily or State.ESPHorses or State.ESPLevers or State.ESPMuzan
 end
 
 bossNameCheck = {
@@ -1357,6 +1361,57 @@ task.spawn(function()
                                                 end
                                             end
                                         end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if State.ESPLevers and #out < ESP_POOL_SIZE then
+                    local map = Workspace:FindFirstChild("Map")
+                    local puzzles = map and map:FindFirstChild("Puzzles")
+                    if puzzles then
+                        for _, d in ipairs(puzzles:GetDescendants()) do
+                            if #out >= ESP_POOL_SIZE then break end
+                            if (d.ClassName == "MeshPart" or d.ClassName == "Part") and d.Name:lower():find("lever") then
+                                local dist = (d.Position - myPos).Magnitude
+                                if dist <= maxDist then
+                                    table.insert(out, {
+                                        type = "point",
+                                        name = "LEVER (" .. math.floor(dist) .. "m)",
+                                        pos = d.Position,
+                                        color = Color3.fromRGB(255, 240, 90)
+                                    })
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if State.ESPMuzan and #out < ESP_POOL_SIZE then
+                    local deb = Workspace:FindFirstChild("Debree")
+                    if deb then
+                        for _, item in ipairs(deb:GetChildren()) do
+                            if #out >= ESP_POOL_SIZE then break end
+                            if item.Name:lower():find("muzan") then
+                                local root = item:FindFirstChild("HumanoidRootPart") or item:FindFirstChildWhichIsA("BasePart")
+                                if root then
+                                    local dist = (root.Position - myPos).Magnitude
+                                    if dist <= maxDist then
+                                        local here = item:FindFirstChild("MuzanIsHere123")
+                                        local label
+                                        if here then
+                                            label = "[MUZAN] HERE (" .. math.floor(dist) .. "m)"
+                                        else
+                                            label = "Muzan lair (" .. math.floor(dist) .. "m)"
+                                        end
+                                        table.insert(out, {
+                                            type = "point",
+                                            name = label,
+                                            pos = root.Position,
+                                            color = Color3.fromRGB(255, 40, 70)
+                                        })
                                     end
                                 end
                             end
@@ -1850,6 +1905,20 @@ ESPSec:Toggle("Horse ESP", false, function(val)
     end
 end)
 
+ESPSec:Toggle("Levers ESP", false, function(val)
+    State.ESPLevers = val
+    if not val and not anyEspOn() then
+        clearAllESP()
+    end
+end)
+
+ESPSec:Toggle("Muzan ESP", false, function(val)
+    State.ESPMuzan = val
+    if not val and not anyEspOn() then
+        clearAllESP()
+    end
+end)
+
 ESPSec:Slider("ESP Max Distance", 1200, 50, 100, 3000, "m", function(val)
     State.ESPDistance = val
 end)
@@ -1951,6 +2020,101 @@ MiscSec:Keybind("Panic Stop", "f2", function(val)
     end
 end)
 
+local farmLastAct = os.clock()
+local need = 0
+local curQuestId = nil
+
+local function farmWatchdog()
+    local anyFarm = State.AutoFarmMobs or State.AutoFarmBoss or State.AutoQuestTasks
+    if not anyFarm then
+        farmLastAct = os.clock()
+        return
+    end
+    local now = os.clock()
+    if now - farmLastAct < 10 then return end
+    farmLastAct = now
+
+    local activeQ = getActiveQuest()
+    if activeQ and not activeQ.Complete then
+        curQuestId = nil
+        need = 0
+    end
+
+    local objective = nil
+    if State.AutoQuestTasks then
+        if activeQ and not activeQ.Complete then
+            for _, t in ipairs(activeQ.Tasks or {}) do
+                if (t.Value or 0) < (t.Max or 1) then
+                    if t.Code and t.Code ~= "" then
+                        objective = codeToMobName(t.Code)
+                    else
+                        local qi = QuestRegistry[State.SelectedQuest]
+                        objective = qi and qi.TargetEnemy
+                    end
+                    if State.QuestPickMode == "Boss Quest" then
+                        local qi = QuestRegistry[State.SelectedQuest]
+                        if qi and qi.BossTarget then objective = qi.BossTarget end
+                    end
+                    break
+                end
+            end
+        end
+    elseif State.AutoFarmBoss then
+        objective = State.SelectedBoss
+    else
+        objective = State.SelectedMob
+    end
+
+    if not objective then return end
+
+    local char = lp.Character
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    local lower = objective:lower()
+    local best, bestD = nil, math.huge
+    local hums = Workspace:FindFirstChild("Humanoids")
+    local deb = Workspace:FindFirstChild("Debree")
+    for _, rootContainer in ipairs({ hums, deb }) do
+        local reg = rootContainer and rootContainer:FindFirstChild("Regions")
+        if reg then
+            for _, r in ipairs(reg:GetChildren()) do
+                local active = r:FindFirstChild("ActiveNpcs")
+                if active then
+                    for _, item in ipairs(active:GetChildren()) do
+                        local iName = item.Name:lower()
+                        if iName:find(lower, 1, true) or lower:find(iName, 1, true) then
+                            local m = item:FindFirstChildOfClass("Model") or (item.ClassName == "Model" and item)
+                            if not m then
+                                for _, s in ipairs(item:GetChildren()) do
+                                    if s.ClassName == "Model" then m = s break end
+                                end
+                            end
+                            if m and not isPlayerModel(m) then
+                                local hum2 = m:FindFirstChildOfClass("Humanoid")
+                                local root2 = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChildWhichIsA("BasePart")
+                                if hum2 and root2 and hum2.Health > 0 and myRoot then
+                                    local d = (root2.Position - myRoot.Position).Magnitude
+                                    if d < bestD then
+                                        bestD = d
+                                        best = root2
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if best then
+        safeTeleport(best.Position + Vector3.new(0, 3, 0))
+        UI:Notify({ Title = "Farm Watchdog", Content = "Resync: jumping to nearest " .. objective, Type = "info", Duration = 2 })
+    else
+        smartTeleportToEntity(objective, getEntityLocation(objective))
+        UI:Notify({ Title = "Farm Watchdog", Content = "No live targets streaming, to spawn zone", Type = "info", Duration = 2 })
+    end
+end
+
 local fafWasFarming = false
 local fafLastStep = 0
 local function fafStep()
@@ -2043,6 +2207,7 @@ task.spawn(function()
         end
         wasDown = down
         fafStep()
+        farmWatchdog()
         task.wait(0.04)
     end
 end)
@@ -2299,6 +2464,7 @@ task.spawn(function()
                             break
                         end
                         
+                        farmLastAct = os.clock()
                         local tRoot = target.Root
                         local tPos = tRoot.Position
                         
@@ -2428,6 +2594,7 @@ task.spawn(function()
                             break
                         end
                         
+                        farmLastAct = os.clock()
                         local bRoot = target.Root
                         local bPos = bRoot.Position
                         
@@ -2481,8 +2648,6 @@ end)
 
 task.spawn(function()
     local combo = 1
-    local curQuestId = nil
-    local need = 0
     while State.Running do
         if State.AutoQuestTasks then
             local char = lp.Character
@@ -2633,6 +2798,7 @@ task.spawn(function()
                                 local currentQ = getActiveQuest()
                                 if currentQ and currentQ.Complete then break end
                                 
+                                farmLastAct = os.clock()
                                 local tRoot = target.Root
                                 local tPos = tRoot.Position
                                 if State.MobDefenseMode == "Head-Stomp (Directly on Top)" then
