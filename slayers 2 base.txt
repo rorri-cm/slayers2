@@ -49,6 +49,8 @@ local State = {
     ESPPlants = false,
     ESPChests = false,
     ESPCrystals = false,
+    ESPSpiderLily = false,
+    ESPHorses = false,
     ESPDistance = 1200,
     UnlockingLocations = false,
     FullAutoFarm = false,
@@ -1094,6 +1096,11 @@ local function clearAllESP()
 end
 State.ClearESP = clearAllESP
 
+local function anyEspOn()
+    return State.ESPMobs or State.ESPBosses or State.ESPPlants or State.ESPChests or State.ESPCrystals
+        or State.ESPSpiderLily or State.ESPHorses
+end
+
 bossNameCheck = {
     ["akazo"] = true, ["gyutai"] = true, ["datai"] = true, ["domae"] = true,
     ["reaper"] = true, ["nezura"] = true, ["yahari"] = true, ["sumari"] = true,
@@ -1112,7 +1119,7 @@ bossNameCheck = {
 
 task.spawn(function()
     while State.Running do
-        local anyEsp = State.ESPMobs or State.ESPBosses or State.ESPPlants or State.ESPChests or State.ESPCrystals
+        local anyEsp = anyEspOn()
         if anyEsp then
             local char = lp.Character
             local myPos = char and char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Position
@@ -1261,6 +1268,94 @@ task.spawn(function()
                                                 pos = p.Position,
                                                 color = Color3.fromRGB(200, 80, 255)
                                             })
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if State.ESPSpiderLily and #out < ESP_POOL_SIZE then
+                    local deb = Workspace:FindFirstChild("Debree")
+                    if deb then
+                        for _, item in ipairs(deb:GetChildren()) do
+                            if #out >= ESP_POOL_SIZE then break end
+                            if item.Name:lower():find("spider lily") then
+                                local p = item:FindFirstChild("RootPart") or item:FindFirstChild("Root") or item:FindFirstChildWhichIsA("BasePart")
+                                if p then
+                                    local dist = (p.Position - myPos).Magnitude
+                                    if dist <= maxDist then
+                                        table.insert(out, {
+                                            type = "point",
+                                            name = "SPIDER LILY (" .. math.floor(dist) .. "m)",
+                                            pos = p.Position,
+                                            color = Color3.fromRGB(255, 120, 200)
+                                        })
+                                    end
+                                end
+                            end
+                        end
+                        local dReg = deb:FindFirstChild("Regions")
+                        if dReg then
+                            for _, r in ipairs(dReg:GetChildren()) do
+                                if #out >= ESP_POOL_SIZE then break end
+                                for _, item in ipairs(r:GetChildren()) do
+                                    if #out >= ESP_POOL_SIZE then break end
+                                    if item.Name:lower():find("spider lily") then
+                                        local p = item:FindFirstChild("RootPart") or item:FindFirstChild("Root") or item:FindFirstChildWhichIsA("BasePart")
+                                        if p then
+                                            local dist = (p.Position - myPos).Magnitude
+                                            if dist <= maxDist then
+                                                table.insert(out, {
+                                                    type = "point",
+                                                    name = "SPIDER LILY (" .. math.floor(dist) .. "m)",
+                                                    pos = p.Position,
+                                                    color = Color3.fromRGB(255, 120, 200)
+                                                })
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if State.ESPHorses and #out < ESP_POOL_SIZE then
+                    local hums = Workspace:FindFirstChild("Humanoids")
+                    local deb = Workspace:FindFirstChild("Debree")
+                    for _, rootContainer in ipairs({ hums, deb }) do
+                        if #out >= ESP_POOL_SIZE then break end
+                        local reg = rootContainer and rootContainer:FindFirstChild("Regions")
+                        if reg then
+                            for _, r in ipairs(reg:GetChildren()) do
+                                if #out >= ESP_POOL_SIZE then break end
+                                local active = r:FindFirstChild("ActiveNpcs")
+                                if active then
+                                    for _, item in ipairs(active:GetChildren()) do
+                                        if #out >= ESP_POOL_SIZE then break end
+                                        if item.Name:lower():find("horse") then
+                                            local m = item:FindFirstChildOfClass("Model") or (item.ClassName == "Model" and item)
+                                            if not m then
+                                                for _, s in ipairs(item:GetChildren()) do
+                                                    if s.ClassName == "Model" then m = s break end
+                                                end
+                                            end
+                                            if m and not isPlayerModel(m) then
+                                                local root = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChildWhichIsA("BasePart")
+                                                if root then
+                                                    local dist = (root.Position - myPos).Magnitude
+                                                    if dist <= maxDist then
+                                                        table.insert(out, {
+                                                            type = "point",
+                                                            name = "[MOUNT] Horse (" .. math.floor(dist) .. "m)",
+                                                            pos = root.Position,
+                                                            color = Color3.fromRGB(120, 255, 200)
+                                                        })
+                                                    end
+                                                end
+                                            end
                                         end
                                     end
                                 end
@@ -1708,35 +1803,49 @@ end)
 
 ESPSec:Toggle("Mobs ESP", false, function(val)
     State.ESPMobs = val
-    if not val and not (State.ESPBosses or State.ESPPlants or State.ESPChests or State.ESPCrystals) then
+    if not val and not anyEspOn() then
         clearAllESP()
     end
 end)
 
 ESPSec:Toggle("Bosses ESP", false, function(val)
     State.ESPBosses = val
-    if not val and not (State.ESPMobs or State.ESPPlants or State.ESPChests or State.ESPCrystals) then
+    if not val and not anyEspOn() then
         clearAllESP()
     end
 end)
 
 ESPSec:Toggle("Plants & Collectibles ESP", false, function(val)
     State.ESPPlants = val
-    if not val and not (State.ESPMobs or State.ESPBosses or State.ESPChests or State.ESPCrystals) then
+    if not val and not anyEspOn() then
         clearAllESP()
     end
 end)
 
 ESPSec:Toggle("Chests ESP", false, function(val)
     State.ESPChests = val
-    if not val and not (State.ESPMobs or State.ESPBosses or State.ESPPlants or State.ESPCrystals) then
+    if not val and not anyEspOn() then
         clearAllESP()
     end
 end)
 
 ESPSec:Toggle("Spawn Crystals ESP", false, function(val)
     State.ESPCrystals = val
-    if not val and not (State.ESPMobs or State.ESPBosses or State.ESPPlants or State.ESPChests) then
+    if not val and not anyEspOn() then
+        clearAllESP()
+    end
+end)
+
+ESPSec:Toggle("Spider Lily ESP", false, function(val)
+    State.ESPSpiderLily = val
+    if not val and not anyEspOn() then
+        clearAllESP()
+    end
+end)
+
+ESPSec:Toggle("Horse ESP", false, function(val)
+    State.ESPHorses = val
+    if not val and not anyEspOn() then
         clearAllESP()
     end
 end)
