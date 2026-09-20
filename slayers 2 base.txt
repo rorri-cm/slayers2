@@ -29,7 +29,6 @@ local State = {
     ReachAssist = false,
     AutoFarmBoss = false,
     SelectedBoss = "Akazo",
-    Godmode = false,
     DefenseMode = "Behind Boss (Back-Lock 0 Damage)",
     BossHeightOffset = 3.8,
     BossBehindDistance = 2.6,
@@ -724,6 +723,7 @@ local function getActiveQuest()
         and pData.slots.Slot1:FindFirstChild("Quests")
         and pData.slots.Slot1.Quests:FindFirstChild("Holder")
     if not holder then return nil end
+    local first = nil
     for _, q in ipairs(holder:GetChildren()) do
         local tasksFolder = q:FindFirstChild("Tasks")
         if tasksFolder then
@@ -743,16 +743,20 @@ local function getActiveQuest()
                 end
             end
             local qStr = q:FindFirstChild("QuestString") and q.QuestString.Value or q.Name
-            return {
+            local entry = {
                 Folder = q,
                 Name = qStr,
                 Id = q.Name,
                 Tasks = tasks,
                 Complete = isAllComplete
             }
+            if not isAllComplete then
+                return entry
+            end
+            if not first then first = entry end
         end
     end
-    return nil
+    return first
 end
 
 local function codeToMobName(code)
@@ -1336,10 +1340,6 @@ end)
 
 FarmBossSec:Slider("Boss Distance / Offset", 2.6, 0.2, 1.5, 15, "", function(val)
     State.BossBehindDistance = val
-end)
-
-FarmBossSec:Toggle("Godmode (Hitbox & Touch Immunity)", false, function(val)
-    State.Godmode = val
 end)
 
 FarmBossSec:Toggle("Universal Auto-Parry / Guard (Key F)", false, function(val)
@@ -2113,9 +2113,20 @@ task.spawn(function()
                         end
                     end
                 else
-                    local spawnPos = getEntityLocation(State.SelectedMob)
-                    smartTeleportToEntity(State.SelectedMob, spawnPos)
-                    task.wait(0.8)
+                    local respawned = false
+                    for _ = 1, 4 do
+                        task.wait(1.0)
+                        if not State.Running or not State.AutoFarmMobs then break end
+                        if #getTargets(State.SelectedMob) > 0 then
+                            respawned = true
+                            break
+                        end
+                    end
+                    if not respawned then
+                        local spawnPos = getEntityLocation(State.SelectedMob)
+                        smartTeleportToEntity(State.SelectedMob, spawnPos)
+                    end
+                    task.wait(0.4)
                 end
             end
         else
@@ -2267,6 +2278,8 @@ task.spawn(function()
                 local questInfo = QuestRegistry[State.SelectedQuest]
                 
                 if not activeQ then
+                    curQuestId = nil
+                    need = 0
                     if questInfo and questInfo.NpcPos then
                         smartTeleportToEntity(questInfo.NpcName, questInfo.NpcPos)
                         task.wait(1.5)
@@ -2301,7 +2314,7 @@ task.spawn(function()
                             break
                         end
                     end
-                    if activeQ.Id ~= curQuestId then
+                    if activeQ.Id ~= curQuestId or (need <= 0 and pendingTask and (pendingTask.Value or 0) == 0) then
                         curQuestId = activeQ.Id
                         local remaining
                         for _, t in ipairs(activeQ.Tasks or {}) do
@@ -2413,9 +2426,24 @@ task.spawn(function()
                                 need = math.max(0, need - 1)
                             end
                         else
-                            local spawnPos = getEntityLocation(targetMob)
-                            smartTeleportToEntity(targetMob, spawnPos)
-                            task.wait(0.8)
+                            local respawned = false
+                            for _ = 1, 4 do
+                                task.wait(1.0)
+                                if not State.Running or not State.AutoQuestTasks then break end
+                                targets = getTargets(targetMob)
+                                if #targets == 0 and questInfo and questInfo.AltTarget then
+                                    targets = getTargets(questInfo.AltTarget)
+                                end
+                                if #targets > 0 then
+                                    respawned = true
+                                    break
+                                end
+                            end
+                            if not respawned then
+                                local spawnPos = getEntityLocation(targetMob)
+                                smartTeleportToEntity(targetMob, spawnPos)
+                            end
+                            task.wait(0.4)
                         end
                     else
                         task.wait(0.5)
