@@ -47,6 +47,14 @@ local State = {
     atkNext = 0,
     pendingLoot = nil,
     collect = nil,
+    lastBossAttack = 0,
+    bossRecoveryAt = 0,
+    deliveryKey = nil,
+    deliverySentAt = 0,
+    deliveryAttempts = 0,
+    deliveryClicks = 0,
+    deliveryBoxWarned = false,
+    deliveryPhase = 1,
     lootPhase = nil,
     chestTap = {},
     BossBehindDistance = 2.6,
@@ -56,6 +64,11 @@ local State = {
     AutoQuestTasks = false,
     SelectedQuest = "[Windy Peak] Krue: 3 Bandits",
     QuestReturnAfter = false,
+    QuestWait = false,
+    QuestWaitTime = 30,
+    questWaitUntil = 0,
+    questWaitKey = nil,
+    questWaitWarned = false,
     AutoCompleteTraining = false,
     AutoSpamSkills = false,
     SkillSpamInterval = 2.0,
@@ -94,7 +107,7 @@ local win = Lib:CreateWindow({
     title = "Slayers 2",
     subtitle = "Hub",
     size = Vector2.new(760, 560),
-    menuKey = "p",
+    menuKey = "none",
     keybindOverlay = true,
     accentA = Color3.fromRGB(122, 134, 255),
     accentB = Color3.fromRGB(189, 130, 255)
@@ -173,6 +186,7 @@ local RegionSpawns = {
     ["Fire Profound Demon"] = Vector3.new(230, 1254, -1983),
     ["Kanoe Demon Slayer"] = Vector3.new(373, 1286, -2031),
     ["Mizunoe Demon Slayer"] = Vector3.new(-2626.7, 284, -191.2),
+    ["Mizunoto Demon Slayer"] = Vector3.new(-2626.7, 284, -191.2),
     ["Fujiko"] = Vector3.new(-2626.7, 284, -191.2),
     ["Akazo"] = Vector3.new(-1132.6, 1381.1, -1742.5),
     ["Gyutai"] = Vector3.new(-263.1, 1043.5, -1150.5),
@@ -307,6 +321,23 @@ local QuestRegistry = {
         TargetEnemy = "Mizunoto",
         Description = "Collect 5 Broken Blades from defeated Mizunoto."
     },
+    ["[Mistfall Harbor] Niko: Supply Box (delivery)"] = {
+        NpcName = "Estate Worker Niko",
+        NpcPos = Vector3.new(341.1, 938.9, 580.6),
+        Region = "Mistfall Harbor",
+        QuestOption = "Ill deliver the supply box(Lv 70)",
+        Description = "Deliver Niko's supply box to Shiori and report back to Niko.",
+        DeliverySteps = {
+            ["Deliver to Shiori"] = {
+                NpcName = "Shiori",
+                NpcPos = Vector3.new(-1814.34, 311.8, -101.07)
+            },
+            ["Report back to Niko"] = {
+                NpcName = "Estate Worker Niko",
+                NpcPos = Vector3.new(341.07, 938.91, 580.59)
+            }
+        }
+    },
     ["[Mistfall Harbor] Ginzo: Lost Jewelry Box"] = {
         NpcName = "Ginzo",
         NpcPos = Vector3.new(273.8, 944.0, 528.2),
@@ -386,6 +417,8 @@ local QuestRegistry = {
         NpcPos = Vector3.new(-2626.7, 284, -191.2),
         Region = "Final Selection Plains",
         TargetEnemy = "Mizunoto Demon Slayer",
+        BossTarget = "Mizunoto Demon Slayer",
+        QuestOption = "Ill break their watch(Lv 75)",
         BossOption = "Ill break their watch(Lv 75)",
         Description = "Defeat the Mizunoto demon slayer."
     },
@@ -409,6 +442,7 @@ local QuestOptions = {
     "[Windy Peak] Lucy: Bear Meat",
     "[Mistfall Harbor] Niko: Eliminate Mizunoto",
     "[Mistfall Harbor] Niko: 5 Broken Blades",
+    "[Mistfall Harbor] Niko: Supply Box (delivery)",
     "[Mistfall Harbor] Ginzo: Lost Jewelry Box",
     "[Bamboo Grove] Betty: Betty's Gemstone",
     "[Bamboo Grove] Tom: Wood & Bamboo",
@@ -602,8 +636,22 @@ local function getNpcModelRoot(container)
     return m:FindFirstChild("HumanoidRootPart") or findBasePart(m, true)
 end
 
+local function findTrueMuzanRoot()
+    local deb = Workspace:FindFirstChild("Debree")
+    local regions = deb and deb:FindFirstChild("Regions")
+    local misc = regions and regions:FindFirstChild("Misc")
+    local stationary = misc and misc:FindFirstChild("StationaryNpcs")
+    local muzan = stationary and stationary:FindFirstChild("Muzan")
+    if not muzan then return nil end
+    return getNpcModelRoot(muzan)
+end
+
 local function findLiveNpcPos(name)
     local lower = string.lower(name)
+    if lower == "muzan" then
+        local root = findTrueMuzanRoot()
+        return root and root.Position or nil
+    end
     local sets = {}
     local deb = Workspace:FindFirstChild("Debree")
     if deb then
@@ -835,6 +883,10 @@ local function getTargets(targetName)
         if dReg then
             for _, r in ipairs(dReg:GetChildren()) do
                 scanActiveFolder(r:FindFirstChild("ActiveNpcs"))
+            end
+            if lowerTarget == "muzan" then
+                local misc = dReg:FindFirstChild("Misc")
+                scanActiveFolder(misc and misc:FindFirstChild("StationaryNpcs"))
             end
         end
         scanActiveFolder(deb:FindFirstChild("ActiveNpcs"))
@@ -1166,10 +1218,13 @@ local function getActiveQuest()
     local pData = ReplicatedStorage:FindFirstChild("Player_Service")
         and ReplicatedStorage.Player_Service:FindFirstChild("Data")
         and ReplicatedStorage.Player_Service.Data:FindFirstChild(lp.Name)
+    local equippedSlot = pData and pData:FindFirstChild("slotEquipped")
+    local slotNumber = equippedSlot and tonumber(equippedSlot.Value) or 1
+    local slotName = "Slot" .. tostring(math.floor(slotNumber))
     local holder = pData and pData:FindFirstChild("slots")
-        and pData.slots:FindFirstChild("Slot1")
-        and pData.slots.Slot1:FindFirstChild("Quests")
-        and pData.slots.Slot1.Quests:FindFirstChild("Holder")
+        and pData.slots:FindFirstChild(slotName)
+        and pData.slots[slotName]:FindFirstChild("Quests")
+        and pData.slots[slotName].Quests:FindFirstChild("Holder")
     if not holder then return nil end
     local first = nil
     for _, q in ipairs(holder:GetChildren()) do
@@ -1377,14 +1432,8 @@ local function collectChoices(actual)
     return choices
 end
 
+local fireAddQuest
 local function handleQuestDialogue(pickBoss)
-    local firstActual = getDialogueUI()
-    if firstActual then
-        local cd = firstActual:FindFirstChild("ClickDetector")
-        if cd then
-            wakeMouse(cd.AbsolutePosition.X + cd.AbsoluteSize.X * 0.4, cd.AbsolutePosition.Y + cd.AbsoluteSize.Y * 0.5)
-        end
-    end
     local attempts = 0
     local acceptedOnce = false
     for _ = 1, 45 do
@@ -1402,23 +1451,26 @@ local function handleQuestDialogue(pickBoss)
             if attempts >= 5 then return false end
             local match = pickChoice(choices, pickBoss)
             if match then
-                uiClick(match.Button)
-                attempts = attempts + 1
-                acceptedOnce = true
-            else
-                for _, c in ipairs(choices) do
-                    if isCloseChoice(c.Text) then
-                        uiClick(c.Button)
-                        attempts = attempts + 1
-                        break
-                    end
+                if fireAddQuest(match.Text) then
+                    attempts = attempts + 1
+                    acceptedOnce = true
+                    task.wait(0.45)
+                    local accepted = getActiveQuest()
+                    if accepted and not accepted.Complete then return true end
+                else
+                    return false
                 end
-                if attempts >= 5 then return false end
+            else
+                return false
             end
             task.wait(0.45)
         else
-            local cd = actual:FindFirstChild("ClickDetector")
-            if cd then uiClick(cd) end
+            pcall(function()
+                if setrobloxinput then setrobloxinput(true) end
+                keypress(84)
+                task.wait(0.35)
+                keyrelease(84)
+            end)
             task.wait(0.45)
         end
     end
@@ -1439,7 +1491,7 @@ end
 -- 2) si no, abrir dialogo con T (teclado), LEER opciones, elegir por regla
 --    singular=boss / plural=normal y fire AddQuest con el texto leido
 -- 3) ultimo recurso: click mouse (handleQuestDialogue)
-local function fireAddQuest(optionText)
+fireAddQuest = function(optionText)
     if not RemoteEvent or type(optionText) ~= "string" or optionText == "" then return false end
     local ok = pcall(function()
         RemoteEvent:FireServer("AddQuest", optionText)
@@ -1455,22 +1507,51 @@ local function pickAcceptText(data, wantBoss)
     return data.QuestOption
 end
 
+local function moveToQuestNpc(npcName, fallbackPos)
+    local live = findLiveNpcPos(npcName)
+    if live then
+        safeTeleport(live)
+    elseif fallbackPos then
+        safeTeleport(fallbackPos)
+    end
+end
+
 local function autoAcceptQuest(npcName, npcPos)
     local data = QuestRegistry[State.SelectedQuest]
     local wantBoss = State.QuestPickMode == "Boss Quest"
+    local forcedDeliveryWait = data and data.DeliverySteps ~= nil
+    if (State.QuestWait or forcedDeliveryWait) and (State.questWaitUntil or 0) > os.clock() then
+        local remaining = State.questWaitUntil - os.clock()
+        UI:Notify({ Title = "Quest Wait", Content = "Waiting " .. tostring(math.ceil(remaining)) .. "s before accepting the quest", Type = "info", Duration = 3 })
+        while State.Running and State.FullAutoFarm and os.clock() < State.questWaitUntil do
+            if iskeypressed and iskeypressed(PanicVK) then
+                if panicStop then panicStop() end
+                return false
+            end
+            remaining = State.questWaitUntil - os.clock()
+            if remaining <= 5 and not State.questWaitWarned then
+                State.questWaitWarned = true
+                UI:Notify({ Title = "Quest Wait", Content = "5 seconds remaining before accepting Niko's Supply Box quest", Type = "info", Duration = 5 })
+            end
+            task.wait(0.25)
+        end
+        State.questWaitUntil = 0
+        State.questWaitWarned = false
+    end
     for round = 1, 3 do
         if not State.Running or not State.FullAutoFarm then return false end
         if iskeypressed and iskeypressed(PanicVK) then
             if panicStop then panicStop() end
             return false
         end
-        smartTeleportToEntity(npcName, npcPos)
+        moveToQuestNpc(npcName, npcPos)
         task.wait(0.9)
 
         local known = pickAcceptText(data, wantBoss)
         if known and fireAddQuest(known) then
             task.wait(1.0)
-            if getActiveQuest() then return true end
+            local accepted = getActiveQuest()
+            if accepted and not accepted.Complete then return true end
         end
 
         pressProximityT()
@@ -1491,16 +1572,108 @@ local function autoAcceptQuest(npcName, npcPos)
             end
             if picked and fireAddQuest(picked) then
                 task.wait(1.0)
-                if getActiveQuest() then return true end
+                local accepted = getActiveQuest()
+                if accepted and not accepted.Complete then return true end
             end
             if handleQuestDialogue(wantBoss) then
                 task.wait(1.0)
-                if getActiveQuest() then return true end
+                local accepted = getActiveQuest()
+                if accepted and not accepted.Complete then return true end
             end
         end
         task.wait(0.6)
     end
     return false
+end
+
+local function getDeliveryTask(activeQ, data)
+    if not activeQ or not data or not data.DeliverySteps then return nil end
+    for _, taskInfo in ipairs(activeQ.Tasks or {}) do
+        if (taskInfo.Value or 0) < (taskInfo.Max or 1) then
+            local exact = data.DeliverySteps[taskInfo.Name]
+            if exact then
+                return taskInfo, exact
+            end
+            local lowerTask = tostring(taskInfo.Name):lower()
+            for label, step in pairs(data.DeliverySteps) do
+                if lowerTask:find(tostring(label):lower(), 1, true)
+                    or tostring(label):lower():find(lowerTask, 1, true) then
+                    return taskInfo, step
+                end
+            end
+
+            if lowerTask:find("report", 1, true)
+                or lowerTask:find("return", 1, true)
+                or lowerTask:find("niko", 1, true) then
+                return taskInfo, data.DeliverySteps["Report back to Niko"]
+            end
+            if lowerTask:find("deliver", 1, true)
+                or lowerTask:find("supply", 1, true)
+                or lowerTask:find("box", 1, true)
+                or lowerTask:find("shiori", 1, true) then
+                return taskInfo, data.DeliverySteps["Deliver to Shiori"]
+            end
+
+            if State.deliveryPhase == 2 then
+                return taskInfo, data.DeliverySteps["Report back to Niko"]
+            end
+            return taskInfo, data.DeliverySteps["Deliver to Shiori"]
+        end
+    end
+    return nil
+end
+
+local function processDeliveryQuest(activeQ, data)
+    local taskInfo, step = getDeliveryTask(activeQ, data)
+    if not taskInfo or not step then return false end
+
+    local key = tostring(data.QuestOption or State.SelectedQuest) .. "|" .. tostring(taskInfo.Name)
+    if State.deliveryKey ~= key then
+        State.deliveryKey = key
+        State.deliverySentAt = 0
+        State.deliveryAttempts = 0
+        local lowerTask = tostring(taskInfo.Name):lower()
+        State.deliveryPhase = (lowerTask:find("report", 1, true)
+            or lowerTask:find("return", 1, true)
+            or lowerTask:find("niko", 1, true)) and 2 or 1
+    end
+
+    State.AutoQuestTasks = false
+    moveToQuestNpc(step.NpcName, step.NpcPos)
+
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp or not vec3Ok(step.NpcPos) then return true end
+    local liveStepPos = findLiveNpcPos(step.NpcName) or step.NpcPos
+    if (hrp.Position - liveStepPos).Magnitude > 10 then return true end
+
+    local now = os.clock()
+    if now - (State.deliverySentAt or 0) < 3 then return true end
+    if (State.deliveryAttempts or 0) >= 4 then
+        UI:Notify({
+            Title = "Delivery Quest",
+            Content = "The delivery was not accepted yet: " .. tostring(taskInfo.Name),
+            Type = "warn",
+            Duration = 4
+        })
+        State.deliveryAttempts = 0
+        State.deliverySentAt = now + 8
+        return true
+    end
+
+    if not RemoteEvent then return true end
+    State.deliverySentAt = now
+    State.deliveryAttempts = (State.deliveryAttempts or 0) + 1
+    pcall(function()
+        RemoteEvent:FireServer("QuestProgress", data.QuestOption, taskInfo.Name)
+    end)
+    UI:Notify({
+        Title = "Delivery Quest",
+        Content = "Delivering: " .. tostring(taskInfo.Name),
+        Type = "info",
+        Duration = 2
+    })
+    return true
 end
 
 local ESP_POOL_SIZE = 48
@@ -1827,31 +2000,16 @@ task.spawn(function()
                 end
                 
                 if State.ESPMuzan and #out < ESP_POOL_SIZE then
-                    local deb = Workspace:FindFirstChild("Debree")
-                    if deb then
-                        for _, item in ipairs(deb:GetChildren()) do
-                            if #out >= ESP_POOL_SIZE then break end
-                            if item.Name:lower():find("muzan") then
-                                local root = item:FindFirstChild("HumanoidRootPart") or findBasePart(item)
-                                if root then
-                                    local dist = (root.Position - myPos).Magnitude
-                                    if dist <= maxDist then
-                                        local here = item:FindFirstChild("MuzanIsHere123")
-                                        local label
-                                        if here then
-                                            label = "[MUZAN] HERE (" .. math.floor(dist) .. "m)"
-                                        else
-                                            label = "Muzan lair (" .. math.floor(dist) .. "m)"
-                                        end
-                                        table.insert(out, {
-                                            type = "point",
-                                            name = label,
-                                            pos = root.Position,
-                                            color = Color3.fromRGB(255, 40, 70)
-                                        })
-                                    end
-                                end
-                            end
+                    local root = findTrueMuzanRoot()
+                    if root and vec3Ok(root.Position) then
+                        local dist = (root.Position - myPos).Magnitude
+                        if dist <= maxDist then
+                            table.insert(out, {
+                                type = "point",
+                                name = "[MUZAN] HERE (" .. math.floor(dist) .. "m)",
+                                pos = root.Position,
+                                color = Color3.fromRGB(255, 40, 70)
+                            })
                         end
                     end
                 end
@@ -2020,6 +2178,18 @@ end, nil, true)
 FarmMobsSec:Dropdown("Quest Mission Type", {"Normal NPC Quest"}, { "Normal NPC Quest", "Boss Quest" }, false, function(val)
     State.QuestPickMode = type(val) == "table" and val[1] or val
 end)
+
+local QuestWaitSlider
+FarmMobsSec:Toggle("Quest Wait", false, function(val)
+    State.QuestWait = val
+    if QuestWaitSlider then
+        QuestWaitSlider:SetVisible(val)
+    end
+end)
+QuestWaitSlider = FarmMobsSec:Slider("Quest Wait Time", 30, 1, 1, 120, "s", function(val)
+    State.QuestWaitTime = tonumber(val) or 30
+end)
+QuestWaitSlider:SetVisible(State.QuestWait)
 
 FarmMobsSec:Toggle("Spam Z & X (sword skills)", false, function(val)
     State.SpamZX = val
@@ -2273,29 +2443,13 @@ end, nil, true)
 
 TeleportSec:Button("Travel to Boss Arena", function()
     local name = SelectedBossTeleport
-    local live = findLiveNpcPos(name)
-    if live then
-        safeTeleport(live)
-        UI:Notify({ Title = "Teleport", Content = "Reached live: " .. tostring(name), Type = "success", Duration = 2 })
-        return
-    end
     local wp = BossTeleports[name]
     if not wp then
         UI:Notify({ Title = "Teleport", Content = "No known waypoint for " .. tostring(name), Type = "warn", Duration = 2 })
         return
     end
     safeTeleport(wp)
-    UI:Notify({ Title = "Teleport", Content = "At " .. tostring(name) .. " area, waiting for load...", Type = "info", Duration = 2 })
-    for _ = 1, 8 do
-        task.wait(1.0)
-        live = findLiveNpcPos(name)
-        if live then
-            safeTeleport(live)
-            UI:Notify({ Title = "Teleport", Content = "Reached live: " .. tostring(name), Type = "success", Duration = 2 })
-            return
-        end
-    end
-    UI:Notify({ Title = "Teleport", Content = "At arena but " .. tostring(name) .. " is not spawned (event/respawn timer)", Type = "warn", Duration = 3 })
+    UI:Notify({ Title = "Teleport", Content = "Teleported to " .. tostring(name) .. " area", Type = "success", Duration = 2 })
 end)
 
 local TrainerNames = {}
@@ -2593,7 +2747,6 @@ MiscSec:Toggle("NoClip", false, function(val)
     State.NoClip = val
 end)
 
-local HideUIVK = 112
 local HideVKMap = {
     f1 = 112, f2 = 113, f3 = 114, f4 = 115, f5 = 116, f6 = 117,
     f7 = 118, f8 = 119, f9 = 120, f10 = 121, f11 = 122, f12 = 123,
@@ -2608,6 +2761,7 @@ local HideVKMap = {
     m1 = 1, m2 = 2
 }
 
+local HideUIVK = 112
 MiscSec:Keybind("Hide UI", "f1", function(val)
     if type(val) ~= "string" then return end
     local code = HideVKMap[val]
@@ -2740,6 +2894,46 @@ local function farmWatchdog()
     end
 end
 
+local function bossWatchdog()
+    if not State.AutoFarmBoss or not State.activeBoss then return end
+    if State.pendingLoot or State.lootPhase or State.collect then return end
+
+    local now = os.clock()
+    if now - (State.bossRecoveryAt or 0) < 8 then return end
+
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp or not vec3Ok(hrp.Position) then return end
+
+    local p = hrp.Position
+    local invalidPosition = p.Y < -500 or p.Y > 5000 or math.abs(p.X) > 10000 or math.abs(p.Z) > 10000
+    local targets = getTargets(State.activeBoss)
+    local target = nil
+    local bestDist = math.huge
+    for _, t in ipairs(targets) do
+        if t.Humanoid and (t.Humanoid.Health or 0) > 0 and vec3Ok(t.Root.Position) then
+            local d = (t.Root.Position - p).Magnitude
+            if d < bestDist then
+                bestDist = d
+                target = t
+            end
+        end
+    end
+
+    local staleAttack = now - (State.lastBossAttack or 0) > 12
+    if target and (invalidPosition or bestDist > 80 or staleAttack) then
+        State.bossRecoveryAt = now
+        State.atkNext = 0
+        safeTeleport(target.Root.Position + Vector3.new(0, 3, 0))
+        UI:Notify({ Title = "Boss Farm", Content = "Recovery: returning to " .. tostring(State.activeBoss), Type = "info", Duration = 2 })
+    elseif not target and staleAttack then
+        State.bossRecoveryAt = now
+        State.atkNext = 0
+        safeTeleport(getEntityLocation(State.activeBoss))
+        UI:Notify({ Title = "Boss Farm", Content = "Recovery: returning to " .. tostring(State.activeBoss) .. " spawn", Type = "info", Duration = 2 })
+    end
+end
+
 local fafWasFarming = false
 local fafLastStep = 0
 local function fafStep()
@@ -2752,11 +2946,21 @@ local function fafStep()
     fafLastStep = now
 
     local stepOk, stepErr = pcall(function()
-        if getDialogueUI() then
+        local activeQ = getActiveQuest()
+        local deliveryData = QuestRegistry[State.SelectedQuest]
+        local deliveryActive = activeQ and not activeQ.Complete
+            and getDeliveryTask(activeQ, deliveryData) ~= nil
+
+        if deliveryActive then
+            if processDeliveryQuest(activeQ, deliveryData) then
+                fafWasFarming = false
+                UI:Notify({ Title = "Full AutoFarm", Content = "Delivery step active", Type = "info", Duration = 2 })
+            end
+        elseif getDialogueUI() then
             handleQuestDialogue(State.QuestPickMode == "Boss Quest")
         else
-            local activeQ = getActiveQuest()
             if activeQ and not activeQ.Complete then
+                State.questWaitKey = nil
                 if not fafWasFarming then
                     fafWasFarming = true
                     State.AutoQuestTasks = true
@@ -2765,26 +2969,50 @@ local function fafStep()
             elseif activeQ and activeQ.Complete then
                 fafWasFarming = false
                 State.AutoQuestTasks = false
+                if State.QuestWait and State.questWaitKey ~= activeQ.Id then
+                    State.questWaitKey = activeQ.Id
+                    State.questWaitUntil = os.clock() + (State.QuestWaitTime or 30)
+                    State.questWaitWarned = false
+                end
+                State.deliveryKey = nil
+                State.deliverySentAt = 0
+                State.deliveryAttempts = 0
+                State.deliveryPhase = 1
                 local data = QuestRegistry[State.SelectedQuest]
                 if data and data.NpcPos then
                     UI:Notify({ Title = "Full AutoFarm", Content = "Quest complete, returning to " .. tostring(data.NpcName), Type = "info", Duration = 3 })
-                    smartTeleportToEntity(data.NpcName, data.NpcPos)
-                    task.wait(0.9)
-                    pressProximityT()
-                    task.wait(0.8)
-                    if getDialogueUI() then
-                        handleQuestDialogue(nil)
-                    end
-                    task.wait(1.2)
-                    if State.FullAutoFarm and not getActiveQuest() then
-                        if autoAcceptQuest(data.NpcName, data.NpcPos) then
-                            UI:Notify({ Title = "Full AutoFarm", Content = "Quest re-accepted, farming...", Type = "success", Duration = 3 })
+                    if data.DeliverySteps then
+                        if State.questWaitKey ~= activeQ.Id then
+                            State.questWaitKey = activeQ.Id
+                            State.questWaitUntil = os.clock() + 30
+                            State.questWaitWarned = false
+                        end
+                        if State.FullAutoFarm and autoAcceptQuest(data.NpcName, data.NpcPos) then
+                            UI:Notify({ Title = "Full AutoFarm", Content = "Niko's Supply Box quest re-accepted", Type = "success", Duration = 3 })
+                        end
+                    else
+                        smartTeleportToEntity(data.NpcName, data.NpcPos)
+                        task.wait(0.9)
+                        pressProximityT()
+                        task.wait(0.8)
+                        if getDialogueUI() then
+                            handleQuestDialogue(nil)
+                        end
+                        task.wait(1.2)
+                        if State.FullAutoFarm and not getActiveQuest() then
+                            if autoAcceptQuest(data.NpcName, data.NpcPos) then
+                                UI:Notify({ Title = "Full AutoFarm", Content = "Quest re-accepted, farming...", Type = "success", Duration = 3 })
+                            end
                         end
                     end
                 end
             else
                 fafWasFarming = false
                 State.AutoQuestTasks = false
+                State.deliveryKey = nil
+                State.deliverySentAt = 0
+                State.deliveryAttempts = 0
+                State.deliveryPhase = 1
                 local data = QuestRegistry[State.SelectedQuest]
                 if data and data.NpcPos then
                     UI:Notify({ Title = "Full AutoFarm", Content = "No active quest, traveling to " .. tostring(data.NpcName), Type = "info", Duration = 3 })
@@ -2841,6 +3069,7 @@ task.spawn(function()
         wasDown = down
         pcall(fafStep)
         pcall(farmWatchdog)
+        pcall(bossWatchdog)
         task.wait(0.04)
     end
 end)
@@ -3260,6 +3489,7 @@ task.spawn(function()
                                 pcall(function() dist2 = (bPos - hrp.Position).Magnitude end)
                                 if dist2 <= (State.SwingReach or 20) then
                                     combo = sendCombatAttack(char, style, combo)
+                                    State.lastBossAttack = os.clock()
                                     if mouse1click then mouse1click() end
                                 end
                             end
