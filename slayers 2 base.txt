@@ -303,9 +303,8 @@ local QuestRegistry = {
         NpcName = "Lucy",
         NpcPos = Vector3.new(-615.5, 1260.2, -1177.5),
         Region = "Bamboo Grove",
-        TargetEnemy = "Mother Bear",
-        AltTarget = "Bear Cub",
-        Description = "Hunt bears to obtain meat for Lucy."
+        TargetEnemy = "Bear Cub",
+        Description = "Hunt Bear Cubs to obtain meat for Lucy."
     },
     ["[Mistfall Harbor] Niko: Eliminate Mizunoto"] = {
         NpcName = "Estate Worker Niko",
@@ -818,6 +817,8 @@ local function getTargets(targetName)
     local results = {}
     local lowerTarget = targetName and targetName:lower() or ""
     local isAll = (targetName == "All Regular Mobs" or targetName == "All Bosses" or targetName == "All Enemies")
+    local normalTargetOnly = lowerTarget:find("subordinate", 1, true) ~= nil
+        or lowerTarget == "bear cub"
     
     local function scanActiveFolder(activeFolder)
         if not activeFolder then return end
@@ -847,7 +848,7 @@ local function getTargets(targetName)
                 end
                 if m and not isPlayerModel(m) then
                     local bossFlag = isBossModel(m)
-                    if exact or isAll or not bossFlag then
+                    if not (normalTargetOnly and bossFlag) and (exact or isAll or not bossFlag) then
                         local hum = m:FindFirstChildOfClass("Humanoid")
                         local root = m:FindFirstChild("HumanoidRootPart") or findBasePart(m)
                         if hum and root and hum.Health and hum.Health > 0 then
@@ -1486,6 +1487,21 @@ local function pressProximityT()
     end)
 end
 
+local function closeQuestDialogue()
+    local actual = getDialogueUI()
+    if not actual then return end
+    local choices = collectChoices(actual)
+    for _, choice in ipairs(choices) do
+        if isCloseChoice(choice.Text) then
+            uiClick(choice.Button)
+            task.wait(0.45)
+            return
+        end
+    end
+    pressProximityT()
+    task.wait(0.45)
+end
+
 -- Auto-accept via FireServer("AddQuest", <opcion>) sin simular mouse:
 -- 1) texto conocido del registry -> fire directo junto al NPC
 -- 2) si no, abrir dialogo con T (teclado), LEER opciones, elegir por regla
@@ -1531,7 +1547,7 @@ local function autoAcceptQuest(npcName, npcPos)
             remaining = State.questWaitUntil - os.clock()
             if remaining <= 5 and not State.questWaitWarned then
                 State.questWaitWarned = true
-                UI:Notify({ Title = "Quest Wait", Content = "5 seconds remaining before accepting Niko's Supply Box quest", Type = "info", Duration = 5 })
+                UI:Notify({ Title = "Quest Wait", Content = "5 seconds remaining before accepting the next quest", Type = "info", Duration = 5 })
             end
             task.wait(0.25)
         end
@@ -1551,7 +1567,10 @@ local function autoAcceptQuest(npcName, npcPos)
         if known and fireAddQuest(known) then
             task.wait(1.0)
             local accepted = getActiveQuest()
-            if accepted and not accepted.Complete then return true end
+            if accepted and not accepted.Complete then
+                closeQuestDialogue()
+                return true
+            end
         end
 
         pressProximityT()
@@ -1573,12 +1592,18 @@ local function autoAcceptQuest(npcName, npcPos)
             if picked and fireAddQuest(picked) then
                 task.wait(1.0)
                 local accepted = getActiveQuest()
-                if accepted and not accepted.Complete then return true end
+                if accepted and not accepted.Complete then
+                    closeQuestDialogue()
+                    return true
+                end
             end
             if handleQuestDialogue(wantBoss) then
                 task.wait(1.0)
                 local accepted = getActiveQuest()
-                if accepted and not accepted.Complete then return true end
+                if accepted and not accepted.Complete then
+                    closeQuestDialogue()
+                    return true
+                end
             end
         end
         task.wait(0.6)
@@ -2864,7 +2889,8 @@ local function farmWatchdog()
                                     if s.ClassName == "Model" then m = s break end
                                 end
                             end
-                            if m and not isPlayerModel(m) then
+                            if m and not isPlayerModel(m)
+                                and not (lower:find("subordinate", 1, true) and isBossModel(m)) then
                                 local hum2 = m:FindFirstChildOfClass("Humanoid")
                                 local root2 = m:FindFirstChild("HumanoidRootPart") or findBasePart(m)
                                 if hum2 and root2 and hum2.Health and hum2.Health > 0 and myRoot then
@@ -2956,14 +2982,17 @@ local function fafStep()
                 fafWasFarming = false
                 UI:Notify({ Title = "Full AutoFarm", Content = "Delivery step active", Type = "info", Duration = 2 })
             end
-        elseif getDialogueUI() then
+        elseif getDialogueUI() and not activeQ then
             handleQuestDialogue(State.QuestPickMode == "Boss Quest")
         else
             if activeQ and not activeQ.Complete then
                 State.questWaitKey = nil
+                State.AutoQuestTasks = true
+                if getDialogueUI() then
+                    closeQuestDialogue()
+                end
                 if not fafWasFarming then
                     fafWasFarming = true
-                    State.AutoQuestTasks = true
                     UI:Notify({ Title = "Full AutoFarm", Content = "Quest active, farming tasks", Type = "success", Duration = 3 })
                 end
             elseif activeQ and activeQ.Complete then
@@ -2980,30 +3009,15 @@ local function fafStep()
                 State.deliveryPhase = 1
                 local data = QuestRegistry[State.SelectedQuest]
                 if data and data.NpcPos then
-                    UI:Notify({ Title = "Full AutoFarm", Content = "Quest complete, returning to " .. tostring(data.NpcName), Type = "info", Duration = 3 })
                     if data.DeliverySteps then
                         if State.questWaitKey ~= activeQ.Id then
                             State.questWaitKey = activeQ.Id
                             State.questWaitUntil = os.clock() + 30
                             State.questWaitWarned = false
                         end
-                        if State.FullAutoFarm and autoAcceptQuest(data.NpcName, data.NpcPos) then
-                            UI:Notify({ Title = "Full AutoFarm", Content = "Niko's Supply Box quest re-accepted", Type = "success", Duration = 3 })
-                        end
-                    else
-                        smartTeleportToEntity(data.NpcName, data.NpcPos)
-                        task.wait(0.9)
-                        pressProximityT()
-                        task.wait(0.8)
-                        if getDialogueUI() then
-                            handleQuestDialogue(nil)
-                        end
-                        task.wait(1.2)
-                        if State.FullAutoFarm and not getActiveQuest() then
-                            if autoAcceptQuest(data.NpcName, data.NpcPos) then
-                                UI:Notify({ Title = "Full AutoFarm", Content = "Quest re-accepted, farming...", Type = "success", Duration = 3 })
-                            end
-                        end
+                    end
+                    if State.FullAutoFarm and autoAcceptQuest(data.NpcName, data.NpcPos) then
+                        UI:Notify({ Title = "Full AutoFarm", Content = "Quest re-accepted, farming...", Type = "success", Duration = 3 })
                     end
                 end
             else
