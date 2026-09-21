@@ -30,6 +30,7 @@ local State = {
     SelectedBoss = "Akazo",
     BossOrder = { "Akazo" },
     bossIdx = 1,
+    activeBoss = nil,
     bossMiss = 0,
     lastMissBoss = nil,
     focusWarned = 0,
@@ -177,7 +178,8 @@ local RegionSpawns = {
     ["Gyutai"] = Vector3.new(-263.1, 1043.5, -1150.5),
     ["Datai"] = Vector3.new(-163.2, 1043.5, -1136.9),
     ["Saneri"] = Vector3.new(-375.2, 1093.6, -438.8),
-    ["Serpent Trainee"] = Vector3.new(-270.3, 1292.49, -1533.8)
+    ["Serpent Trainee"] = Vector3.new(-270.3, 1292.49, -1533.8),
+    ["Nezura"] = Vector3.new(-1456.63, 278.45, 927.69)
 }
 
 local RegularMobsList = {
@@ -379,6 +381,14 @@ local QuestRegistry = {
         AltTarget = "Fujiko",
         Description = "Defeat final selection targets."
     },
+    ["[Demon Only] Mizunoto slayer"] = {
+        NpcName = "Demon Mokuro",
+        NpcPos = Vector3.new(-2626.7, 284, -191.2),
+        Region = "Final Selection Plains",
+        TargetEnemy = "Mizunoto Demon Slayer",
+        BossOption = "Ill break their watch(Lv 75)",
+        Description = "Defeat the Mizunoto demon slayer."
+    },
     ["[Misc] Muzan: Demon Quest"] = {
         NpcName = "Muzan",
         NpcPos = Vector3.new(182.1, 875.0, 697.0),
@@ -408,6 +418,7 @@ local QuestOptions = {
     "[Iceveil Valley] Tomoi: Ice Demons",
     "[Iceveil Valley] Mitsu: Fire Demons",
     "[Final Selection] Exam: Mizunoe",
+    "[Demon Only] Mizunoto slayer",
     "[Misc] Muzan: Demon Quest",
     "[Auto-Detect Any Active Quest]"
 }
@@ -451,7 +462,7 @@ local BossTeleports = {
     ["Zentaro"] = Vector3.new(1329.34, 823.5, -1022.86),
     ["Gyorei"] = Vector3.new(2569.72, 1091.5, -730.2),
     ["Rengu"] = Vector3.new(768.77, 1121.7, -1045.64),
-    ["Nezura"] = Vector3.new(395.4, 1018.5, -622.7),
+    ["Nezura"] = Vector3.new(-1456.63, 278.45, 927.69),
     ["Yahari"] = Vector3.new(809.68, 1021.01, -632.32),
     ["Sumari"] = Vector3.new(400.17, 1020.5, -596.86),
     ["Flame Trainee"] = Vector3.new(-263.1, 1043.5, -1150.5),
@@ -2085,6 +2096,7 @@ hAutoFarmBoss = FarmBossSec:Toggle("Auto-Farm Selected Boss", false, function(va
         State.AutoFarmMobs = false
         UI:Notify({ Title = "Boss Farm Active", Content = "Queue: " .. table.concat(State.BossOrder or {}, " > "), Type = "success", Duration = 3 })
     else
+        State.activeBoss = nil
         if keyrelease then
             pcall(function()
                 keyrelease(102)
@@ -3163,7 +3175,7 @@ task.spawn(function()
                     hrp = char and char:FindFirstChild("HumanoidRootPart")
                 until char and hum and hum.Health > 0 and hrp
                 task.wait(0.6)
-                local cbn = currentBossName()
+                local cbn = State.activeBoss or currentBossName()
                 if cbn then
                     local dest = getEntityLocation(cbn)
                     smartTeleportToEntity(cbn, dest)
@@ -3176,7 +3188,7 @@ task.spawn(function()
             hrp = char and char:FindFirstChild("HumanoidRootPart")
             
             if hum and hrp and hum.Health > 0 then
-                local bossName = currentBossName()
+                local bossName = State.activeBoss or currentBossName()
                 if not bossName then
                     UI:Notify({ Title = "Boss Farm", Content = "Queue is empty - select at least one boss", Type = "warn", Duration = 3 })
                     task.wait(2.0)
@@ -3202,6 +3214,7 @@ task.spawn(function()
                 end
                 
                 if target and target.Humanoid and (target.Humanoid.Health or 0) > 0 then
+                    State.activeBoss = bossName
                     local style = getEquippedStyle()
                     local bossLastPos = hrp.Position
                     State.bossMiss = 0
@@ -3293,7 +3306,10 @@ task.spawn(function()
                             if #getTargets(bossName) > 0 then break end
                         end
                         if #getTargets(bossName) == 0 then
-                            if State.bossMiss >= queueLen then
+                            if State.activeBoss then
+                                State.bossMiss = 0
+                                UI:Notify({ Title = "Boss Farm", Content = tostring(State.activeBoss) .. " is not spawned - waiting for the same boss", Type = "info", Duration = 2 })
+                            elseif State.bossMiss >= queueLen then
                                 State.bossMiss = 0
                                 State.lastMissBoss = nil
                                 UI:Notify({ Title = "Boss Farm", Content = "No queued boss is spawned - waiting for respawn/event", Type = "warn", Duration = 3 })
@@ -3332,6 +3348,7 @@ task.spawn(function()
                 elseif (now - phase.last) > (State.LootWait or 5) or (now - phase.t0) > 45 then
                     State.lootPhase = nil
                     State.pendingLoot = nil
+                    State.activeBoss = nil
                     advanceBoss()
                     UI:Notify({ Title = "Boss Loot", Content = "Drops done, returning to spawn", Type = "info", Duration = 2 })
                 else
@@ -3343,8 +3360,9 @@ task.spawn(function()
                 end
             end
         elseif not State.AutoLoot then
-            State.pendingLoot = nil
-            State.lootPhase = nil
+    State.pendingLoot = nil
+    State.lootPhase = nil
+    State.activeBoss = nil
             if State.collect then collectStop() end
         end
         task.wait(0.05)
